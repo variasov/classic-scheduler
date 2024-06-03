@@ -1,7 +1,8 @@
 import logging
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from croniter import croniter
 
@@ -13,7 +14,7 @@ class Task(ABC):
 
     def __init__(
         self,
-        job: Callable[[], None],
+        job: Callable[[...], None],
         args: tuple = None,
         kwargs: dict = None,
         name: Optional[str] = None,
@@ -63,10 +64,10 @@ class Task(ABC):
         else:
             logging.info('Task completed [%s]', self._name)
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: 'Task') -> bool:
         return self._next_run_time < other._next_run_time
 
-    def __gt__(self, other) -> bool:
+    def __gt__(self, other: 'Task') -> bool:
         return self._next_run_time > other._next_run_time
 
 
@@ -75,7 +76,7 @@ class OneTimeTask(Task):
     Одноразовая задача, которая будет выполнена ровно один раз.
     """
 
-    def __init__(self, date: datetime, *args, **kwargs) -> None:
+    def __init__(self, date: datetime, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._next_run_time = date
 
@@ -88,7 +89,7 @@ class CronTask(Task):
     Задача которая выполняется по CRON расписанию.
     """
 
-    def __init__(self, schedule: str, *args, **kwargs) -> None:
+    def __init__(self, schedule: str, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._schedule = croniter(schedule, datetime.now(timezone.utc))
         self._next_run_time = self._schedule.get_next(datetime)
@@ -103,10 +104,18 @@ class PeriodicTask(Task):
     через указанный интервал времени.
     """
 
-    def __init__(self, period: timedelta, *args, **kwargs) -> None:
+    def __init__(self, period: timedelta, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._period = period
         self._next_run_time = datetime.now(timezone.utc)
 
     def set_next_run_time(self) -> None:
         self._next_run_time += self._period
+
+
+@dataclass
+class ScheduleCancellation:
+    """
+    Команда отмены запланированное задачи.
+    """
+    task_name: str
