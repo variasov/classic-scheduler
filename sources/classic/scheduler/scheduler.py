@@ -244,5 +244,5 @@ class ThreadPoolScheduler(BaseScheduler):
         self._thread_pool.submit(task.run_job)
 
     def stop(self, wait: bool = True) -> None:
-        super(ThreadPoolScheduler, self).stop(wait=wait)
+        super().stop(wait=wait)
         self._thread_pool.shutdown(wait=wait)

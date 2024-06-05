@@ -116,6 +116,6 @@ class PeriodicTask(Task):
 @dataclass
 class ScheduleCancellation:
     """
-    Команда отмены запланированное задачи.
+    Команда отмены запланированной задачи.
     """
     task_name: str
