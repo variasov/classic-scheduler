@@ -1,27 +1,99 @@
 import heapq
+from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from queue import Empty, Queue
+from threading import Thread
 from typing import Any, Callable, Union
 
-from classic.actors.actor import Actor
+from .task import (CronTask, OneTimeTask, PeriodicTask, ScheduleCancellation,
+                   Task)
 
-from .task import CronTask, OneTimeTask, PeriodicTask, Task
 
-
-class Scheduler(Actor):
+class BaseScheduler(ABC):
     """
-    Планировщик задач. Вызывает переданные ему Callable объекты в своем потоке
-    в соответствии с расписанием.
+    Планировщик задач. Вызывает переданные ему Callable объекты в соответствии
+    с расписанием.
     """
 
     def __init__(self) -> None:
         super().__init__()
-        self._tasks: list[Task] = []
+        self._executor = Thread(target=self._run)
+        self._tasks = []
+        self._inbox = Queue()
+        self._stopped = False
 
-    @Actor.method
+    def _get_timeout(self) -> float:
+        """
+        Возвращает время ожидания выполнения следующей задачи.
+
+        Returns:
+            float: тайм-аут ожидания задачи.
+        """
+        if len(self._tasks) < 1:
+            return 60
+
+        dt_next_task = self._tasks[0].next_run_time
+        dt_current = datetime.now(timezone.utc)
+        if dt_next_task < dt_current:
+            return 0
+        else:
+            return (dt_next_task - dt_current).total_seconds()
+
+    def _unshedule(self, task_name: str) -> None:
+        """
+        Отменяет выполнение запланированной задачи.
+
+        Args:
+            task_name (str): Имя задачи для отмены.
+        """
+        for t in self._tasks:
+            if t.name == task_name:
+                del t
+                heapq.heapify(self._tasks)
+                break
+
+    @abstractmethod
+    def _execute(self, task: Task) -> None:
+        """
+        Выполняет текущую задачу.
+
+        Args:
+            task (Task): Задача, которую необходимо выполнить.
+        """
+        pass
+
+    def _run(self) -> None:
+        """
+        Главный цикл выполнения планировщика.
+        """
+        while not self._stopped:
+            timeout = self._get_timeout()
+            if timeout > 0:
+                try:
+                    command = self._inbox.get(block=True, timeout=timeout)
+                except Empty:
+                    pass
+                else:
+                    if isinstance(command, Task):
+                        heapq.heappush(self._tasks, command)
+                    elif isinstance(command, ScheduleCancellation):
+                        self._unshedule(command.task_name)
+            else:
+                # получаем и выполняем ближайшую задачу из кучи
+                task: Task = heapq.heappop(self._tasks)
+                self._execute(task)
+
+                # высчитываем следующее время запуска задачи и добавляем ее в
+                # кучу
+                task.set_next_run_time()
+                if task.next_run_time:
+                    heapq.heappush(self._tasks, task)
+
     def with_delay(
         self,
         delay: Union[timedelta, float],
-        job: Callable[[], Any],
+        job: Callable[[], None],
         args: tuple = None,
         kwargs: dict = None,
         task_name: str = None,
@@ -37,9 +109,10 @@ class Scheduler(Actor):
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (str, optional): Имя таски. По умолчанию None.
         """
-        delta = delay if isinstance(delay, timedelta) else timedelta(
-            seconds=delay)
-        date = datetime.now(timezone.utc) + delta
+        if not isinstance(delay, timedelta):
+            delay = timedelta(seconds=delay)
+
+        date = datetime.now(timezone.utc) + delay
         task = OneTimeTask(
             date=date,
             job=job,
@@ -47,9 +120,8 @@ class Scheduler(Actor):
             kwargs=kwargs,
             name=task_name,
         )
-        heapq.heappush(self._tasks, task)
+        self._inbox.put(task)
 
-    @Actor.method
     def by_cron(
         self,
         schedule: str,
@@ -75,9 +147,8 @@ class Scheduler(Actor):
             kwargs=kwargs,
             name=task_name,
         )
-        heapq.heappush(self._tasks, task)
+        self._inbox.put(task)
 
-    @Actor.method
     def by_period(
         self,
         period: Union[timedelta, float],
@@ -87,7 +158,7 @@ class Scheduler(Actor):
         task_name: str = None,
     ) -> None:
         """
-        Добавляет задачу которая будет выполняется переодически через
+        Добавляет задачу которая будет выполняется периодически через
         указанный интервал времени.
 
         Args:
@@ -97,58 +168,81 @@ class Scheduler(Actor):
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (_type_, optional): Имя таски. По умолчанию None.
         """
-        delta = period if isinstance(period, timedelta) else timedelta(
-            seconds=period)
+        if not isinstance(period, timedelta):
+            period = timedelta(seconds=period)
+
         task = PeriodicTask(
-            period=delta,
+            period=period,
             job=job,
             args=args,
             kwargs=kwargs,
             name=task_name,
         )
-        heapq.heappush(self._tasks, task)
+        self._inbox.put(task)
 
-    @Actor.method
-    def cancel(self, task_name: str) -> None:
+    def unshedule(self, task_name: str) -> None:
         """
         Отменяет выполнение запланированной задачи.
 
         Args:
             task_name (str): Имя задачи для отмены.
         """
-        for t in self._tasks:
-            if t.name == task_name:
-                del t
-                heapq.heapify(self._tasks)
-                break
+        cancellation = ScheduleCancellation(task_name=task_name)
+        self._inbox.put(cancellation)
 
-    def _get_timeout(self) -> float:
+    def start(self, wait: bool = True) -> None:
         """
-        Возвращает время ожидания поступлений сообщений
-        в основном рабочем цикле.
+        Запускает выполнение планировщика.
 
-        Returns:
-            float: тайм-аут ожидания сообщений в inbox.
+        Args:
+            wait (bool): Ожидает завершение выполнения планировщика в случае
+                         значения True.
         """
-        if len(self._tasks) < 1:
-            return 60
+        self._executor.start()
+        if wait:
+            self._executor.join()
 
-        dt_next_task = self._tasks[0].next_run_time
-        dt_current = datetime.now(timezone.utc)
-        if dt_next_task < dt_current:
-            return 0
-        else:
-            return (dt_next_task - dt_current).seconds
+    def stop(self, wait: bool = True) -> None:
+        """
+        Завершает выполнение планировщика.
 
-    def _on_timeout(self) -> None:
+        Args:
+            wait (bool): Ожидает завершение выполнения планировщика в случае
+                         значения True.
         """
-        Обрабатывает истечение времени ожидания новых сообщений в inbox.
-        """
-        if self._tasks:
-            # получаем ближайшую задачу из кучи
-            task: Task = heapq.heappop(self._tasks)
-            task.run_job()
-            # высчитываем следующее время запуска задачи и добавляем ее в кучу
-            task.set_next_run_time()
-            if task.next_run_time:
-                heapq.heappush(self._tasks, task)
+        self._stopped = True
+        if wait:
+            self._executor.join()
+
+
+class SimpleScheduler(BaseScheduler):
+    """
+    Планировщик задач. Вызывает переданные ему Callable объекты в своем потоке
+    в соответствии с расписанием. Поскольку поток один, то не допускается
+    параллельное выполнение задач.
+    """
+
+    def _execute(self, task: Task) -> None:
+        task.run_job()
+
+
+class ThreadPoolScheduler(BaseScheduler):
+    """
+    Планировщик задач. Вызывает переданные ему Callable объекты в пуле потоков
+    в соответствии с расписанием.
+
+    Данный планировщик не предоставляет гарантий
+    того, что одна и та же задача не будет работать в разных потоках
+    одновременно.
+    """
+
+    def __init__(self, workers_count: int = 5):
+        super().__init__()
+        self._thread_pool = ThreadPoolExecutor(max_workers=workers_count)
+
+    def _execute(self, task: Task) -> None:
+        self._thread_pool.submit(task.run_job)
+
+    def stop(self, wait: bool = True) -> None:
+        super().stop(wait=wait)
+        self._thread_pool.shutdown(wait=wait)
