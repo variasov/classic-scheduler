@@ -47,11 +47,10 @@ class BaseScheduler(ABC):
         Args:
             task_name (str): Имя задачи для отмены.
         """
-        for t in self._tasks:
-            if t.name == task_name:
-                del t
-                heapq.heapify(self._tasks)
-                break
+        tasks = [t for t in self._tasks if t.name != task_name]
+        if len(self._tasks) != len(tasks):
+            heapq.heapify(tasks)
+            self._tasks = tasks
 
     @abstractmethod
     def _execute(self, task: Task) -> None:
@@ -211,6 +210,9 @@ class BaseScheduler(ABC):
                          значения True.
         """
         self._stopped = True
+        # Необходимо разблокировать пустую очередь со временем ожидания
+        # 60 секунд.
+        self._inbox.put('stopped')
         if wait:
             self._executor.join()
 
