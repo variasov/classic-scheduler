@@ -114,7 +114,7 @@ class PeriodicTask(Task):
         self._next_run_time = datetime.now(timezone.utc)
 
     def set_next_run_time(self) -> None:
-        self._next_run_time += self._period
+        self._next_run_time = datetime.now(timezone.utc) + self._period
 
 
 @dataclass
@@ -123,3 +123,6 @@ class ScheduleCancellation:
     Команда отмены запланированной задачи.
     """
     task_name: str
+
+
+STOP = object()

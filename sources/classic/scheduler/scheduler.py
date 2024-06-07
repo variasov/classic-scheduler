@@ -6,8 +6,8 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any, Callable, Union
 
-from .task import (CronTask, OneTimeTask, PeriodicTask, ScheduleCancellation,
-                   Task)
+from .task import (STOP, CronTask, OneTimeTask, PeriodicTask,
+                   ScheduleCancellation, Task)
 
 
 class BaseScheduler(ABC):
@@ -15,13 +15,13 @@ class BaseScheduler(ABC):
     Планировщик задач. Вызывает переданные ему Callable объекты в соответствии
     с расписанием.
     """
+    _stopped: bool
 
     def __init__(self) -> None:
         super().__init__()
-        self._executor = Thread(target=self._run)
+        self._thread = Thread(target=self.loop)
         self._tasks = []
         self._inbox = Queue()
-        self._stopped = False
 
     def _get_timeout(self) -> float:
         """
@@ -39,6 +39,9 @@ class BaseScheduler(ABC):
             return 0
         else:
             return (dt_next_task - dt_current).total_seconds()
+
+    def _schedule(self, task: Task) -> None:
+        heapq.heappush(self._tasks, task)
 
     def _unshedule(self, task_name: str) -> None:
         """
@@ -62,32 +65,39 @@ class BaseScheduler(ABC):
         """
         pass
 
-    def _run(self) -> None:
+    def _stop(self) -> None:
+        self._stopped = True
+
+    def loop(self) -> None:
         """
         Главный цикл выполнения планировщика.
         """
+        self._stopped = False
         while not self._stopped:
-            timeout = self._get_timeout()
-            if timeout > 0:
-                try:
-                    command = self._inbox.get(block=True, timeout=timeout)
-                except Empty:
-                    pass
-                else:
+            try:
+                timeout = self._get_timeout()
+                if timeout > 0:
+                    try:
+                        command = self._inbox.get(block=True, timeout=timeout)
+                    except Empty:
+                        continue
+
                     if isinstance(command, Task):
-                        heapq.heappush(self._tasks, command)
+                        self._schedule(command)
                     elif isinstance(command, ScheduleCancellation):
                         self._unshedule(command.task_name)
-            else:
-                # получаем и выполняем ближайшую задачу из кучи
-                task: Task = heapq.heappop(self._tasks)
-                self._execute(task)
+                    elif command is STOP:
+                        break
+                else:
+                    task: Task = heapq.heappop(self._tasks)
+                    self._execute(task)
 
-                # высчитываем следующее время запуска задачи и добавляем ее в
-                # кучу
-                task.set_next_run_time()
-                if task.next_run_time:
-                    heapq.heappush(self._tasks, task)
+                    task.set_next_run_time()
+                    if task.next_run_time:
+                        self._schedule(task)
+            except KeyboardInterrupt:
+                break
+        self._stop()
 
     def with_delay(
         self,
@@ -189,32 +199,17 @@ class BaseScheduler(ABC):
         cancellation = ScheduleCancellation(task_name=task_name)
         self._inbox.put(cancellation)
 
-    def start(self, wait: bool = True) -> None:
+    def start(self) -> None:
         """
         Запускает выполнение планировщика.
-
-        Args:
-            wait (bool): Ожидает завершение выполнения планировщика в случае
-                         значения True.
         """
-        self._executor.start()
-        if wait:
-            self._executor.join()
+        self._thread.start()
 
-    def stop(self, wait: bool = True) -> None:
+    def stop(self) -> None:
         """
         Завершает выполнение планировщика.
-
-        Args:
-            wait (bool): Ожидает завершение выполнения планировщика в случае
-                         значения True.
         """
-        self._stopped = True
-        # Необходимо разблокировать пустую очередь со временем ожидания
-        # 60 секунд.
-        self._inbox.put('stopped')
-        if wait:
-            self._executor.join()
+        self._inbox.put(STOP)
 
 
 class SimpleScheduler(BaseScheduler):
@@ -245,6 +240,6 @@ class ThreadPoolScheduler(BaseScheduler):
     def _execute(self, task: Task) -> None:
         self._thread_pool.submit(task.run_job)
 
-    def stop(self, wait: bool = True) -> None:
-        super().stop(wait=wait)
-        self._thread_pool.shutdown(wait=wait)
+    def _stop(self) -> None:
+        super()._stop()
+        self._thread_pool.shutdown(wait=True)
