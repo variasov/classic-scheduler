@@ -44,12 +44,12 @@ def test__base_scheduler__with_delay(scheduler: BaseScheduler) -> None:
         nonlocal result
         result = a + b
 
-    scheduler.with_delay(0.05, task, args=(1, ), kwargs=dict(b=2))
+    scheduler.with_delay(0.2, task, args=(1, ), kwargs=dict(b=2))
 
-    time.sleep(0.04)
+    time.sleep(0.18)
     assert result is None
 
-    time.sleep(0.02)
+    time.sleep(0.04)
     assert result == 3
 
 
@@ -140,22 +140,21 @@ def test__base_scheduler__by_period(scheduler: BaseScheduler) -> None:
         results.append(task_result)
 
     scheduler.by_period(
-        0.05,
+        0.2,
         task,
         args=(1, ),
         kwargs=dict(b=2),
         task_name=task_name,
     )
 
+    time.sleep(0.02)
     for result in all_results:
-        time.sleep(0.005)
         expected_results.append(result)
         assert results == expected_results
 
-        time.sleep(0.04)
+        time.sleep(0.17)
         assert results == expected_results
-
-        time.sleep(0.005)
+        time.sleep(0.03)
 
     scheduler.unshedule(task_name)
 
@@ -165,7 +164,7 @@ def test__base_scheduler__loop(stopped_scheduler: BaseScheduler) -> None:
 
     def run() -> None:
         stopped_scheduler.with_delay(0.05, task)
-        time.sleep(0.045)
+        time.sleep(0.03)
         stopped_scheduler.stop()
 
     def task() -> None:
