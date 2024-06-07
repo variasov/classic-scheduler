@@ -26,6 +26,10 @@ class Task(ABC):
         self._next_run_time = None  # время следующего запуска задачи
 
     @property
+    def name(self) -> str:
+        return self._name
+
+    @property
     def next_run_time(self) -> datetime:
         """
         Свойство возвращающее время следующего запуска.
@@ -110,7 +114,7 @@ class PeriodicTask(Task):
         self._next_run_time = datetime.now(timezone.utc)
 
     def set_next_run_time(self) -> None:
-        self._next_run_time += self._period
+        self._next_run_time = datetime.now(timezone.utc) + self._period
 
 
 @dataclass
@@ -119,3 +123,6 @@ class ScheduleCancellation:
     Команда отмены запланированной задачи.
     """
     task_name: str
+
+
+STOP = object()
