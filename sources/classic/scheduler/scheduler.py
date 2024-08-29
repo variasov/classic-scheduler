@@ -108,15 +108,15 @@ class Scheduler:
                         self._stop()
                 else:
                     task: Task = heapq.heappop(self._tasks)
-                    self._execute_task(task)
-
                     task.set_next_run_time()
                     if task.next_run_time:
                         self._schedule(task)
+                    self._execute_task(task)
             except KeyboardInterrupt:
                 self._stop()
 
-        self._thread_pool.shutdown(wait=True, cancel_futures=True)
+        if self._thread_pool:
+            self._thread_pool.shutdown(wait=True, cancel_futures=True)
 
     def with_delay(
         self,
@@ -218,7 +218,7 @@ class Scheduler:
         """
         Запускает выполнение планировщика.
         """
-        if self._thread and not self._thread.is_alive():
+        if not self._thread or not self._thread.is_alive():
             self._thread = Thread(target=self.run)
             self._thread.start()
 
