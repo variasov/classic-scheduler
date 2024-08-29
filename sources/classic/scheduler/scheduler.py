@@ -219,7 +219,10 @@ class Scheduler:
         Запускает выполнение планировщика.
         """
         if not self._thread or not self._thread.is_alive():
-            self._thread = Thread(target=self.run)
+            # TODO: Без deamon=True потоки не останавливались до завершения
+            # выполнения задачи. Нужно найти аналогичное решение для
+            # корректной остановки потока.
+            self._thread = Thread(target=self.run, daemon=True)
             self._thread.start()
 
     def stop(self, block: bool = True, timeout: float = None) -> None:
