@@ -8,8 +8,6 @@ from typing import Any, Callable, Union, Optional
 
 from .task import CronTask, OneTimeTask, PeriodicTask, Task
 
-from deprecated import deprecated
-
 
 Stop = object()
 
@@ -87,10 +85,6 @@ class Scheduler:
 
     def _stop(self) -> None:
         self._stopped = True
-
-    @deprecated
-    def loop(self):
-        return self.run()
 
     def run(self) -> None:
         """
@@ -210,10 +204,6 @@ class Scheduler:
             name=task_name,
         ))
 
-    @deprecated
-    def unschedule(self, task_name: str) -> None:
-        return self.cancel(task_name)
-
     def cancel(self, task_name: str) -> None:
         """
         Отменяет выполнение запланированной задачи.
@@ -231,11 +221,6 @@ class Scheduler:
         if self._thread and not self._thread.is_alive():
             self._thread = Thread(target=self.run)
             self._thread.start()
-
-    @deprecated
-    def unshedule(self):
-        # Опечатку в названии метода исправлять не надо!
-        return self.stop(block=False)
 
     def stop(self, block: bool = True, timeout: float = None) -> None:
         """
