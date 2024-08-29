@@ -3,13 +3,12 @@ from datetime import datetime
 from threading import Thread
 
 import pytest
-from classic.scheduler import (BaseScheduler, SimpleScheduler,
-                               ThreadPoolScheduler)
+from classic.scheduler import Scheduler
 
 
 @pytest.fixture(scope='function')
-def scheduler() -> SimpleScheduler:
-    scheduler = SimpleScheduler()
+def scheduler() -> Scheduler:
+    scheduler = Scheduler()
     scheduler.start()
 
     yield scheduler
@@ -18,26 +17,11 @@ def scheduler() -> SimpleScheduler:
 
 
 @pytest.fixture(scope='function')
-def stopped_scheduler() -> SimpleScheduler:
-    return SimpleScheduler()
+def stopped_scheduler() -> Scheduler:
+    return Scheduler()
 
 
-@pytest.fixture(scope='function')
-def thread_pool_scheduler() -> ThreadPoolScheduler:
-    scheduler = ThreadPoolScheduler()
-    scheduler.start()
-
-    yield scheduler
-
-    scheduler.stop()
-
-
-@pytest.fixture(scope='function')
-def stopped_thread_pool_scheduler() -> ThreadPoolScheduler:
-    return ThreadPoolScheduler()
-
-
-def test__base_scheduler__with_delay(scheduler: BaseScheduler) -> None:
+def test__scheduler__with_delay(scheduler: Scheduler) -> None:
     result = None
 
     def task(a: int, b: int) -> None:
@@ -53,13 +37,13 @@ def test__base_scheduler__with_delay(scheduler: BaseScheduler) -> None:
     assert result == 3
 
 
-def test__base_scheduler__unshedule(scheduler: BaseScheduler) -> None:
+def test__scheduler__cancel(scheduler: Scheduler) -> None:
 
     executed_tasks = []
     expected_tasks = []
 
-    def task(task_name: str) -> None:
-        executed_tasks.append(task_name)
+    def task(task_name_: str) -> None:
+        executed_tasks.append(task_name_)
 
     task_name = 'by_cron'
     scheduler.by_cron(
@@ -93,7 +77,7 @@ def test__base_scheduler__unshedule(scheduler: BaseScheduler) -> None:
     assert executed_tasks == expected_tasks
 
 
-def test__base_scheduler__by_cron(scheduler: BaseScheduler) -> None:
+def test__scheduler__by_cron(scheduler: Scheduler) -> None:
     task_name = 'by_cron'
     all_results = [3, 5]
     results = []
@@ -128,7 +112,7 @@ def test__base_scheduler__by_cron(scheduler: BaseScheduler) -> None:
     scheduler.unshedule(task_name)
 
 
-def test__base_scheduler__by_period(scheduler: BaseScheduler) -> None:
+def test__scheduler__by_period(scheduler: Scheduler) -> None:
     task_name = 'by_period'
     all_results = [3, 5, 7]
     results = []
@@ -159,7 +143,7 @@ def test__base_scheduler__by_period(scheduler: BaseScheduler) -> None:
     scheduler.unshedule(task_name)
 
 
-def test__base_scheduler__loop(stopped_scheduler: BaseScheduler) -> None:
+def test__scheduler__run(stopped_scheduler: Scheduler) -> None:
     result = False
 
     def run() -> None:
@@ -178,33 +162,3 @@ def test__base_scheduler__loop(stopped_scheduler: BaseScheduler) -> None:
     time.sleep(0.05)
     assert not thread.is_alive()
     assert not result
-
-
-def test__thread_pool_scheduler__with_delay(
-    thread_pool_scheduler: ThreadPoolScheduler,
-) -> None:
-    test__base_scheduler__with_delay(thread_pool_scheduler)
-
-
-def test__thread_pool_scheduler__unshedule(
-    thread_pool_scheduler: ThreadPoolScheduler,
-) -> None:
-    test__base_scheduler__unshedule(thread_pool_scheduler)
-
-
-def test__thread_pool_scheduler__by_cron(
-    thread_pool_scheduler: ThreadPoolScheduler,
-) -> None:
-    test__base_scheduler__by_cron(thread_pool_scheduler)
-
-
-def test__thread_pool_scheduler__by_period(
-    thread_pool_scheduler: ThreadPoolScheduler,
-) -> None:
-    test__base_scheduler__by_period(thread_pool_scheduler)
-
-
-def test__thread_pool_scheduler__loop(
-    thread_pool_scheduler: ThreadPoolScheduler,
-) -> None:
-    test__base_scheduler__loop(thread_pool_scheduler)

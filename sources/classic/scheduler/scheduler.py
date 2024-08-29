@@ -1,29 +1,47 @@
 import heapq
-from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from queue import Empty, Queue
 from threading import Thread
-from typing import Any, Callable, Union
+from typing import Any, Callable, Union, Optional
 
-from .task import (STOP, CronTask, OneTimeTask, PeriodicTask,
-                   ScheduleCancellation, Task)
+from .task import CronTask, OneTimeTask, PeriodicTask, Task
+
+from deprecated import deprecated
 
 
-class BaseScheduler(ABC):
+Stop = object()
+
+
+@dataclass
+class CancelTask:
+    """
+    Команда отмены запланированной задачи.
+    """
+    task_name: str
+
+
+class Scheduler:
     """
     Планировщик задач. Вызывает переданные ему Callable объекты в соответствии
     с расписанием.
     """
     _stopped: bool
+    _thread: Optional[Thread]
+    _thread_pool: Optional[ThreadPoolExecutor]
 
-    def __init__(self) -> None:
+    def __init__(self, workers_num: int = 1) -> None:
         super().__init__()
-        self._thread = Thread(target=self.loop)
+        self._thread = None
         self._tasks = []
         self._inbox = Queue()
+        if workers_num:
+            self._thread_pool = ThreadPoolExecutor(max_workers=workers_num)
+        else:
+            self._thread_pool = None
 
-    def _get_timeout(self) -> float:
+    def _calc_next_task_execute_time(self) -> float:
         """
         Возвращает время ожидания выполнения следующей задачи.
 
@@ -43,7 +61,7 @@ class BaseScheduler(ABC):
     def _schedule(self, task: Task) -> None:
         heapq.heappush(self._tasks, task)
 
-    def _unshedule(self, task_name: str) -> None:
+    def _cancel(self, task_name: str) -> None:
         """
         Отменяет выполнение запланированной задачи.
 
@@ -55,27 +73,33 @@ class BaseScheduler(ABC):
             heapq.heapify(tasks)
             self._tasks = tasks
 
-    @abstractmethod
-    def _execute(self, task: Task) -> None:
+    def _execute_task(self, task: Task) -> None:
         """
         Выполняет текущую задачу.
 
         Args:
             task (Task): Задача, которую необходимо выполнить.
         """
-        pass
+        if self._thread_pool:
+            self._thread_pool.submit(task.run_job)
+        else:
+            task.run_job()
 
     def _stop(self) -> None:
         self._stopped = True
 
-    def loop(self) -> None:
+    @deprecated
+    def loop(self):
+        return self.run()
+
+    def run(self) -> None:
         """
         Главный цикл выполнения планировщика.
         """
         self._stopped = False
         while not self._stopped:
             try:
-                timeout = self._get_timeout()
+                timeout = self._calc_next_task_execute_time()
                 if timeout > 0:
                     try:
                         command = self._inbox.get(block=True, timeout=timeout)
@@ -84,20 +108,21 @@ class BaseScheduler(ABC):
 
                     if isinstance(command, Task):
                         self._schedule(command)
-                    elif isinstance(command, ScheduleCancellation):
-                        self._unshedule(command.task_name)
-                    elif command is STOP:
-                        break
+                    elif isinstance(command, CancelTask):
+                        self._cancel(command.task_name)
+                    elif command is Stop:
+                        self._stop()
                 else:
                     task: Task = heapq.heappop(self._tasks)
-                    self._execute(task)
+                    self._execute_task(task)
 
                     task.set_next_run_time()
                     if task.next_run_time:
                         self._schedule(task)
             except KeyboardInterrupt:
-                break
-        self._stop()
+                self._stop()
+
+        self._thread_pool.shutdown(wait=True, cancel_futures=True)
 
     def with_delay(
         self,
@@ -121,15 +146,13 @@ class BaseScheduler(ABC):
         if not isinstance(delay, timedelta):
             delay = timedelta(seconds=delay)
 
-        date = datetime.now(timezone.utc) + delay
-        task = OneTimeTask(
-            date=date,
+        self._inbox.put(OneTimeTask(
+            date=datetime.now(timezone.utc) + delay,
             job=job,
             args=args,
             kwargs=kwargs,
             name=task_name,
-        )
-        self._inbox.put(task)
+        ))
 
     def by_cron(
         self,
@@ -149,14 +172,13 @@ class BaseScheduler(ABC):
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (str, optional): Имя таски. По умолчанию None.
         """
-        task = CronTask(
+        self._inbox.put(CronTask(
             schedule=schedule,
             job=job,
             args=args,
             kwargs=kwargs,
             name=task_name,
-        )
-        self._inbox.put(task)
+        ))
 
     def by_period(
         self,
@@ -180,66 +202,50 @@ class BaseScheduler(ABC):
         if not isinstance(period, timedelta):
             period = timedelta(seconds=period)
 
-        task = PeriodicTask(
+        self._inbox.put(PeriodicTask(
             period=period,
             job=job,
             args=args,
             kwargs=kwargs,
             name=task_name,
-        )
-        self._inbox.put(task)
+        ))
 
-    def unshedule(self, task_name: str) -> None:
+    @deprecated
+    def unschedule(self, task_name: str) -> None:
+        return self.cancel(task_name)
+
+    def cancel(self, task_name: str) -> None:
         """
         Отменяет выполнение запланированной задачи.
 
         Args:
             task_name (str): Имя задачи для отмены.
         """
-        cancellation = ScheduleCancellation(task_name=task_name)
+        cancellation = CancelTask(task_name=task_name)
         self._inbox.put(cancellation)
 
     def start(self) -> None:
         """
         Запускает выполнение планировщика.
         """
-        self._thread.start()
+        if self._thread and not self._thread.is_alive():
+            self._thread = Thread(target=self.run)
+            self._thread.start()
 
-    def stop(self) -> None:
+    @deprecated
+    def unshedule(self):
+        # Опечатку в названии метода исправлять не надо!
+        return self.stop(block=False)
+
+    def stop(self, block: bool = True, timeout: float = None) -> None:
         """
         Завершает выполнение планировщика.
         """
-        self._inbox.put(STOP)
+        if self._thread and self._thread.is_alive():
+            self._inbox.put(Stop)
+            if block:
+                self._thread.join(timeout)
 
-
-class SimpleScheduler(BaseScheduler):
-    """
-    Планировщик задач. Вызывает переданные ему Callable объекты в своем потоке
-    в соответствии с расписанием. Поскольку поток один, то не допускается
-    параллельное выполнение задач.
-    """
-
-    def _execute(self, task: Task) -> None:
-        task.run_job()
-
-
-class ThreadPoolScheduler(BaseScheduler):
-    """
-    Планировщик задач. Вызывает переданные ему Callable объекты в пуле потоков
-    в соответствии с расписанием.
-
-    Данный планировщик не предоставляет гарантий
-    того, что одна и та же задача не будет работать в разных потоках
-    одновременно.
-    """
-
-    def __init__(self, workers_count: int = 5):
-        super().__init__()
-        self._thread_pool = ThreadPoolExecutor(max_workers=workers_count)
-
-    def _execute(self, task: Task) -> None:
-        self._thread_pool.submit(task.run_job)
-
-    def _stop(self) -> None:
-        super()._stop()
-        self._thread_pool.shutdown(wait=True)
+    def join(self, timeout: float = None):
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout)
