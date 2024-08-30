@@ -1,6 +1,5 @@
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Optional
 
@@ -90,7 +89,7 @@ class OneTimeTask(Task):
 
 class CronTask(Task):
     """
-    Задача которая выполняется по CRON расписанию.
+    Задача, которая выполняется по CRON расписанию.
     """
 
     def __init__(self, schedule: str, *args: Any, **kwargs: Any) -> None:
@@ -104,8 +103,7 @@ class CronTask(Task):
 
 class PeriodicTask(Task):
     """
-    Задача которая будет выполняется переодически
-    через указанный интервал времени.
+    Задача, которая будет выполняться периодически.
     """
 
     def __init__(self, period: timedelta, *args: Any, **kwargs: Any) -> None:
@@ -115,14 +113,3 @@ class PeriodicTask(Task):
 
     def set_next_run_time(self) -> None:
         self._next_run_time = datetime.now(timezone.utc) + self._period
-
-
-@dataclass
-class ScheduleCancellation:
-    """
-    Команда отмены запланированной задачи.
-    """
-    task_name: str
-
-
-STOP = object()
