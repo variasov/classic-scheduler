@@ -1,5 +1,8 @@
 import heapq
-from concurrent.futures import ThreadPoolExecutor
+import logging
+import queue
+
+from classic.executor import Executor as ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from queue import Empty, Queue
@@ -29,13 +32,23 @@ class Scheduler:
     _thread: Optional[Thread]
     _thread_pool: Optional[ThreadPoolExecutor]
 
-    def __init__(self, workers_num: int = 1) -> None:
+    def __init__(
+        self,
+        workers_num: int = 1,
+        queue_size: int = 0,
+        logger: logging.Logger | None = None,
+    ) -> None:
         super().__init__()
         self._thread = None
         self._tasks = []
         self._inbox = Queue()
+        self.logger = logger or logging.getLogger('scheduler')
+
         if workers_num:
-            self._thread_pool = ThreadPoolExecutor(max_workers=workers_num)
+            self._thread_pool = ThreadPoolExecutor(
+                workers_num=workers_num,
+                inbox=queue.Queue(queue_size),
+            )
         else:
             self._thread_pool = None
 
@@ -79,7 +92,12 @@ class Scheduler:
             task (Task): Задача, которую необходимо выполнить.
         """
         if self._thread_pool:
-            self._thread_pool.submit(task.run_job)
+            try:
+                self._thread_pool.submit(task.run_job)
+            except queue.Full:
+                self.logger.error(
+                    'Queue is full. Task execution failed. Task: %s', task
+                )
         else:
             task.run_job()
 
@@ -116,7 +134,7 @@ class Scheduler:
                 self._stop()
 
         if self._thread_pool:
-            self._thread_pool.shutdown(wait=True, cancel_futures=True)
+            self._thread_pool.stop()
 
     def with_delay(
         self,
