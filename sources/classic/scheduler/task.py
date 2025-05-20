@@ -21,7 +21,7 @@ class Task(ABC):
         self._job = job
         self._args = args or ()
         self._kwargs = kwargs or {}
-        self._name = name
+        self._name = name or job.__qualname__
         self._next_run_time = None  # время следующего запуска задачи
 
     @property
