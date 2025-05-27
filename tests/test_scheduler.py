@@ -7,16 +7,6 @@ from classic.scheduler import Scheduler
 
 
 @pytest.fixture(scope='function')
-def scheduler() -> Scheduler:
-    scheduler = Scheduler()
-    scheduler.start()
-
-    yield scheduler
-
-    scheduler.stop()
-
-
-@pytest.fixture(scope='function')
 def stopped_scheduler() -> Scheduler:
     return Scheduler()
 
@@ -52,14 +42,14 @@ def test__scheduler__cancel(scheduler: Scheduler) -> None:
         args=(task_name, ),
         task_name=task_name,
     )
-    scheduler.unshedule(task_name)
+    scheduler.cancel(task_name)
     time.sleep(0.045)
-    scheduler.unshedule(task_name)
+    scheduler.cancel(task_name)
 
     task_name = 'with_delay'
     scheduler.with_delay(0.05, task, args=(task_name, ), task_name=task_name)
     time.sleep(0.045)
-    scheduler.unshedule(task_name)
+    scheduler.cancel(task_name)
 
     task_name = 'by_period'
     scheduler.by_period(
@@ -71,7 +61,7 @@ def test__scheduler__cancel(scheduler: Scheduler) -> None:
     # Задача "by_period" выполняется сразу же
     expected_tasks.append(task_name)
     time.sleep(0.045)
-    scheduler.unshedule(task_name)
+    scheduler.cancel(task_name)
 
     time.sleep(1.1)
     assert executed_tasks == expected_tasks
@@ -109,7 +99,7 @@ def test__scheduler__by_cron(scheduler: Scheduler) -> None:
         expected_results.append(result)
         assert results == expected_results
 
-    scheduler.unshedule(task_name)
+    scheduler.cancel(task_name)
 
 
 def test__scheduler__by_period(scheduler: Scheduler) -> None:
@@ -140,7 +130,7 @@ def test__scheduler__by_period(scheduler: Scheduler) -> None:
         assert results == expected_results
         time.sleep(0.03)
 
-    scheduler.unshedule(task_name)
+    scheduler.cancel(task_name)
 
 
 def test__scheduler__run(stopped_scheduler: Scheduler) -> None:
@@ -158,7 +148,7 @@ def test__scheduler__run(stopped_scheduler: Scheduler) -> None:
     thread = Thread(target=run)
     thread.start()
 
-    stopped_scheduler.loop()
+    stopped_scheduler.start()
     time.sleep(0.05)
     assert not thread.is_alive()
     assert not result
