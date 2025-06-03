@@ -1,6 +1,5 @@
 [build-system]
 requires = [
-    "croniter~=3.0",
     "setuptools >= 40.6.0",
     "wheel"
 ]
@@ -18,6 +17,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
+    "croniter~=3.0",
 ]
 
 [project.optional-dependencies]
