@@ -1,5 +1,6 @@
 import heapq
 import inspect
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -32,11 +33,18 @@ class Scheduler(Registry):
     _thread: Optional[Thread]
     _thread_pool: Optional[ThreadPoolExecutor]
 
-    def __init__(self, workers_num: int = 1) -> None:
+    def __init__(
+        self,
+        workers_num: int = 1,
+        log_exceptions: bool = True,
+        logger: logging.Logger = None,
+    ) -> None:
         super().__init__()
         self._thread = None
         self._tasks = []
         self._inbox = Queue()
+        self._log_exceptions = log_exceptions
+        self._logger = logger or logging.getLogger('scheduler')
         if workers_num:
             self._thread_pool = ThreadPoolExecutor(max_workers=workers_num)
         else:
@@ -128,6 +136,7 @@ class Scheduler(Registry):
         args: tuple = None,
         kwargs: dict = None,
         task_name: str = None,
+        log_exceptions: bool = None,
     ) -> None:
         """
         Добавляет отложенную задачу в планировщик.
@@ -139,7 +148,9 @@ class Scheduler(Registry):
             args (tuple, optional): Аргументы. По умолчанию None.
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (str, optional): Имя таски. По умолчанию None.
+            log_exceptions (bool, optional): Логирование ошибок. По умолчанию None.
         """
+        log_exceptions = True if log_exceptions else self._log_exceptions
         if not isinstance(delay, timedelta):
             delay = timedelta(seconds=delay)
 
@@ -149,6 +160,8 @@ class Scheduler(Registry):
             args=args,
             kwargs=kwargs,
             name=task_name,
+            log_exceptions=log_exceptions,
+            logger=self._logger,
         ))
 
     def by_cron(
@@ -158,6 +171,7 @@ class Scheduler(Registry):
         args: tuple = None,
         kwargs: dict = None,
         task_name: str = None,
+        log_exceptions: bool = None,
     ) -> None:
         """
         Добавляет задачу которая будет выполнятся по CRON расписанию.
@@ -168,13 +182,17 @@ class Scheduler(Registry):
             args (tuple, optional): Аргументы. По умолчанию None.
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (str, optional): Имя таски. По умолчанию None.
+            log_exceptions (bool, optional): Логирование ошибок. По умолчанию None.
         """
+        log_exceptions = True if log_exceptions else self._log_exceptions
         self._inbox.put(CronTask(
             schedule=schedule,
             job=job,
             args=args,
             kwargs=kwargs,
             name=task_name,
+            log_exceptions=log_exceptions,
+            logger=self._logger,
         ))
 
     def by_period(
@@ -184,6 +202,7 @@ class Scheduler(Registry):
         args: tuple = None,
         kwargs: dict = None,
         task_name: str = None,
+        log_exceptions: bool = None,
     ) -> None:
         """
         Добавляет задачу которая будет выполняется периодически через
@@ -195,7 +214,9 @@ class Scheduler(Registry):
             args (tuple, optional): Аргументы. По умолчанию None.
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (_type_, optional): Имя таски. По умолчанию None.
+            log_exceptions (bool, optional): Логирование ошибок. По умолчанию None.
         """
+        log_exceptions = True if log_exceptions else self._log_exceptions
         if not isinstance(period, timedelta):
             period = timedelta(seconds=period)
 
@@ -205,6 +226,8 @@ class Scheduler(Registry):
             args=args,
             kwargs=kwargs,
             name=task_name,
+            log_exceptions=log_exceptions,
+            logger=self._logger,
         ))
 
     def cancel(self, task_name: str) -> None:
