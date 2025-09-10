@@ -14,20 +14,15 @@ class Task(ABC):
     def __init__(
         self,
         job: Callable[[...], None],
-        logger: Optional[logging.Logger],
         args: tuple = None,
         kwargs: dict = None,
         name: Optional[str] = None,
-        log_exceptions: bool = True,
     ) -> None:
         self._job = job
         self._args = args or ()
         self._kwargs = kwargs or {}
         self._name = name or job.__qualname__
         self._next_run_time = None  # время следующего запуска задачи
-        self._logger = logger
-        self._log_exceptions = log_exceptions
-
 
     @property
     def name(self) -> str:
@@ -55,7 +50,7 @@ class Task(ABC):
         Вызывает переданный Callable объект со всем аргументами
         в потоке планировщика.
         """
-        self._logger.info(
+        logging.info(
             'Task [%s] started with schedule [%s]',
             self._name,
             self._next_run_time,
@@ -64,14 +59,13 @@ class Task(ABC):
         try:
             self._job(*self._args, **self._kwargs)
         except Exception as ex:
-            if self._log_exceptions:
-                self._logger.exception(
-                    'Unexpected error occurred in task [%s]: "%s".',
-                    self._name,
-                    ex,
-                )
+            logging.exception(
+                'Unexpected error occurred in task [%s]: "%s".',
+                self._name,
+                ex,
+            )
         else:
-            self._logger.info('Task completed [%s]', self._name)
+            logging.info('Task completed [%s]', self._name)
 
     def __lt__(self, other: 'Task') -> bool:
         return self._next_run_time < other._next_run_time
