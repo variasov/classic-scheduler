@@ -7,12 +7,10 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import Any, Callable, Union, Optional
 
+from classic.actors import Actor, Stop
 from classic.components import Registry
 
 from .task import CronTask, OneTimeTask, PeriodicTask, Task
-
-
-Stop = object()
 
 
 @dataclass
@@ -23,7 +21,7 @@ class CancelTask:
     task_name: str
 
 
-class Scheduler(Registry):
+class Scheduler(Registry, Actor):
     """
     Планировщик задач. Вызывает переданные ему Callable объекты в соответствии
     с расписанием.
@@ -86,9 +84,6 @@ class Scheduler(Registry):
         else:
             task.run_job()
 
-    def _stop(self) -> None:
-        self._stopped = True
-
     def run(self) -> None:
         """
         Главный цикл выполнения планировщика.
@@ -107,8 +102,8 @@ class Scheduler(Registry):
                         self._schedule(command)
                     elif isinstance(command, CancelTask):
                         self._cancel(command.task_name)
-                    elif command is Stop:
-                        self._stop()
+                    elif isinstance(command, Stop):
+                        self._stop(command)
                 else:
                     task: Task = heapq.heappop(self._tasks)
                     task.set_next_run_time()
@@ -216,30 +211,6 @@ class Scheduler(Registry):
         """
         cancellation = CancelTask(task_name=task_name)
         self._inbox.put(cancellation)
-
-    def start(self) -> None:
-        """
-        Запускает выполнение планировщика.
-        """
-        if not self._thread or not self._thread.is_alive():
-            # TODO: Без deamon=True потоки не останавливались до завершения
-            # выполнения задачи. Нужно найти аналогичное решение для
-            # корректной остановки потока.
-            self._thread = Thread(target=self.run, daemon=True)
-            self._thread.start()
-
-    def stop(self, block: bool = True, timeout: float = None) -> None:
-        """
-        Завершает выполнение планировщика.
-        """
-        if self._thread and self._thread.is_alive():
-            self._inbox.put(Stop)
-            if block:
-                self._thread.join(timeout)
-
-    def join(self, timeout: float = None):
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout)
 
     @staticmethod
     def _task_name_for_method(
