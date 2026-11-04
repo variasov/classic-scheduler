@@ -1,13 +1,10 @@
 import heapq
-import inspect
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from queue import Empty, Queue
 from threading import Event, Thread
 from typing import Any, Callable, Union, Optional
-
-from classic.components import Registry
 
 from .task import CronTask, OneTimeTask, PeriodicTask, Task
 
@@ -27,7 +24,7 @@ class Stop:
     """
 
 
-class Scheduler(Registry):
+class Scheduler:
     """
     Планировщик задач. Вызывает переданные ему Callable объекты в соответствии
     с расписанием.
@@ -39,7 +36,6 @@ class Scheduler(Registry):
     _thread_pool: Optional[ThreadPoolExecutor]
 
     def __init__(self, workers_num: int = 1) -> None:
-        super().__init__()
         self._workers_num = workers_num
         self._thread = None
         self._thread_pool = None
@@ -315,44 +311,3 @@ class Scheduler(Registry):
         if len(self._tasks) != len(tasks):
             heapq.heapify(tasks)
             self._tasks = tasks
-
-    @staticmethod
-    def _task_name_for_method(
-        method: Callable,
-        schedule: str | float | timedelta,
-    ) -> str:
-        # TODO: Ключи однозначно идентифицируют методы классов
-        # в привязке к расписанию, но выглядят нечитаемо
-        return f'{id(method)}.{schedule}'
-
-    def register(self, obj: Any) -> None:
-        for name, param in inspect.getmembers(obj):
-            cron_schedules = getattr(param, '__by_cron__', None)
-            if cron_schedules:
-                for schedule in cron_schedules:
-                    self.by_cron(
-                        schedule, param,
-                        task_name=self._task_name_for_method(obj, schedule),
-                    )
-
-            periodic_schedules = getattr(param, '__by_period__', None)
-            if periodic_schedules:
-                for schedule in periodic_schedules:
-                    self._task_name_for_method(obj, schedule)
-                    self.by_period(
-                        schedule, param,
-                        task_name=self._task_name_for_method(obj, schedule),
-                    )
-
-    def unregister(self, obj: Any) -> None:
-        for name, param in inspect.getmembers(obj):
-            cron_schedules = getattr(param, '__by_cron__', None)
-            if cron_schedules:
-                for schedule in cron_schedules:
-                    self.cancel(self._task_name_for_method(obj, schedule))
-
-            periodic_schedules = getattr(param, '__by_period__', None)
-            if periodic_schedules:
-                for schedule in periodic_schedules:
-                    self._task_name_for_method(obj, schedule)
-                    self.cancel(self._task_name_for_method(obj, schedule))

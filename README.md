@@ -43,36 +43,6 @@ scheduler.run()
 
 Метод .join() блокирует текущий поток в ожидании завершения фонового потока
 
-## Интеграция с classic-components
-Если используется совместно с classic-components,
-то можно использовать декораторы by_period и by_cron на классах с логикой,
-чтобы упростить регистрацию задач:
-
-```python
-from classic.components import component
-from classic.scheduler import Scheduler, by_period, by_cron
-
-
-@component
-def SomeLogic:
-    
-    @by_period(1)
-    def need_to_call_periodically(self):
-        print('Hello')
-    
-    @by_cron('* * * * *')
-    def need_to_call_by_schedule(self):
-        print('Hi')
-
-
-scheduler = Scheduler()
-some_logic = SomeLogic(scheduler=scheduler)  # Регистрация произойдет при инстанцировании компонента
-scheduler.run()
-
-# Hello
-# Hi
-```
-
 ## Отмена вызова (удаление задачи)
 
 Если расписание задач планируется динамически менять, например, удалить ранее 
