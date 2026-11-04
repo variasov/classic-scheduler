@@ -2,7 +2,6 @@ from threading import Event, Thread
 
 from classic.scheduler import Scheduler
 
-
 TIMEOUT = 5
 
 

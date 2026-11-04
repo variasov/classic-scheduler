@@ -1,12 +1,12 @@
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from threading import Thread
 
 import pytest
 from classic.scheduler import Scheduler
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture
 def stopped_scheduler() -> Scheduler:
     return Scheduler()
 
@@ -18,7 +18,7 @@ def test__scheduler__with_delay(scheduler: Scheduler) -> None:
         nonlocal result
         result = a + b
 
-    scheduler.with_delay(0.2, task, args=(1, ), kwargs=dict(b=2))
+    scheduler.with_delay(0.2, task, args=(1,), kwargs={"b": 2})
 
     time.sleep(0.18)
     assert result is None
@@ -29,33 +29,33 @@ def test__scheduler__with_delay(scheduler: Scheduler) -> None:
 
 def test__scheduler__cancel(scheduler: Scheduler) -> None:
 
-    executed_tasks = []
-    expected_tasks = []
+    executed_tasks: list[str] = []
+    expected_tasks: list[str] = []
 
     def task(task_name_: str) -> None:
         executed_tasks.append(task_name_)
 
-    task_name = 'by_cron'
+    task_name = "by_cron"
     scheduler.by_cron(
-        '* * * * * *',
+        "* * * * * *",
         task,
-        args=(task_name, ),
+        args=(task_name,),
         task_name=task_name,
     )
     scheduler.cancel(task_name)
     time.sleep(0.045)
     scheduler.cancel(task_name)
 
-    task_name = 'with_delay'
-    scheduler.with_delay(0.05, task, args=(task_name, ), task_name=task_name)
+    task_name = "with_delay"
+    scheduler.with_delay(0.05, task, args=(task_name,), task_name=task_name)
     time.sleep(0.045)
     scheduler.cancel(task_name)
 
-    task_name = 'by_period'
+    task_name = "by_period"
     scheduler.by_period(
         0.05,
         task,
-        args=(task_name, ),
+        args=(task_name,),
         task_name=task_name,
     )
     # Задача "by_period" выполняется сразу же
@@ -68,10 +68,10 @@ def test__scheduler__cancel(scheduler: Scheduler) -> None:
 
 
 def test__scheduler__by_cron(scheduler: Scheduler) -> None:
-    task_name = 'by_cron'
+    task_name = "by_cron"
     all_results = [3, 5]
-    results = []
-    expected_results = []
+    results: list[int] = []
+    expected_results: list[int] = []
 
     def task(a: int, b: int) -> None:
         a = results[-1] if results else a
@@ -79,15 +79,15 @@ def test__scheduler__by_cron(scheduler: Scheduler) -> None:
         results.append(task_result)
 
     scheduler.by_cron(
-        '* * * * * *',
+        "* * * * * *",
         task,
-        args=(1, ),
-        kwargs=dict(b=2),
+        args=(1,),
+        kwargs={"b": 2},
         task_name=task_name,
     )
     for result in all_results:
         tick = 0.08
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         time_from = now.replace(microsecond=0)
         delta = 1 - (now - time_from).total_seconds()
 
@@ -103,10 +103,10 @@ def test__scheduler__by_cron(scheduler: Scheduler) -> None:
 
 
 def test__scheduler__by_period(scheduler: Scheduler) -> None:
-    task_name = 'by_period'
+    task_name = "by_period"
     all_results = [3, 5, 7]
-    results = []
-    expected_results = []
+    results: list[int] = []
+    expected_results: list[int] = []
 
     def task(a: int, b: int) -> None:
         a = results[-1] if results else a
@@ -116,8 +116,8 @@ def test__scheduler__by_period(scheduler: Scheduler) -> None:
     scheduler.by_period(
         0.2,
         task,
-        args=(1, ),
-        kwargs=dict(b=2),
+        args=(1,),
+        kwargs={"b": 2},
         task_name=task_name,
     )
 
