@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from typing import Any, Callable, Optional
 
 from croniter import croniter
@@ -90,15 +90,30 @@ class OneTimeTask(Task):
 class CronTask(Task):
     """
     Задача, которая выполняется по CRON расписанию.
+
+    Расписание считается в часовом поясе tz. Если tz не указан,
+    используется локальный часовой пояс процесса (с учётом перехода
+    на летнее время).
     """
 
-    def __init__(self, schedule: str, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        schedule: str,
+        *args: Any,
+        tz: Optional[tzinfo] = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
-        self._schedule = croniter(schedule, datetime.now(timezone.utc))
-        self._next_run_time = self._schedule.get_next(datetime)
+        self._schedule = croniter(schedule, datetime.now(tz))
+        self._next_run_time = self._get_next()
+
+    def _get_next(self) -> datetime:
+        next_run_time = self._schedule.get_next(datetime)
+        # Наивное время - локальное, astimezone() делает его осведомлённым
+        return next_run_time.astimezone()
 
     def set_next_run_time(self) -> None:
-        self._next_run_time = self._schedule.get_next(datetime)
+        self._next_run_time = self._get_next()
 
 
 class PeriodicTask(Task):

@@ -1,7 +1,7 @@
 import heapq
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, tzinfo
 from queue import Empty, Queue
 from threading import Event, Thread
 from typing import Any, Callable, Union, Optional
@@ -35,8 +35,20 @@ class Scheduler:
     _thread: Optional[Thread]
     _thread_pool: Optional[ThreadPoolExecutor]
 
-    def __init__(self, workers_num: int = 1) -> None:
+    def __init__(
+        self,
+        workers_num: int = 1,
+        tz: Optional[tzinfo] = None,
+    ) -> None:
+        """
+        Args:
+            workers_num (int, optional): Число потоков для выполнения задач.
+                0 - задачи выполняются в потоке планировщика. По умолчанию 1.
+            tz (Optional[tzinfo], optional): Часовой пояс для CRON-расписаний.
+                По умолчанию None - локальный часовой пояс процесса.
+        """
         self._workers_num = workers_num
+        self._tz = tz
         self._thread = None
         self._thread_pool = None
         self._running = Event()
@@ -241,6 +253,7 @@ class Scheduler:
         args: tuple = None,
         kwargs: dict = None,
         task_name: str = None,
+        tz: Optional[tzinfo] = None,
     ) -> None:
         """
         Добавляет задачу которая будет выполнятся по CRON расписанию.
@@ -251,9 +264,12 @@ class Scheduler:
             args (tuple, optional): Аргументы. По умолчанию None.
             kwargs (dict, optional): Аргументы. По умолчанию None.
             task_name (str, optional): Имя таски. По умолчанию None.
+            tz (Optional[tzinfo], optional): Часовой пояс расписания.
+                По умолчанию None - часовой пояс планировщика.
         """
         self._inbox.put(CronTask(
             schedule=schedule,
+            tz=tz or self._tz,
             job=job,
             args=args,
             kwargs=kwargs,
