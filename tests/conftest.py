@@ -10,4 +10,4 @@ def scheduler() -> Scheduler:
 
     yield scheduler
 
-    scheduler.stop()
+    scheduler.stop(block=True, timeout=5)
