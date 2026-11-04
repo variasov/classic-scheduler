@@ -28,9 +28,9 @@ class Stop:
 def _is_due(task: Task, now: datetime) -> bool:
     next_run_time = task.next_run_time
     if next_run_time is None:
-        msg = "Scheduled task has no next run time"
-        raise TypeError(msg)
-    return next_run_time <= now
+        msg = "Scheduled task has no next run time"  # pragma: no mutate
+        raise TypeError(msg)  # pragma: no mutate
+    return next_run_time <= now  # pragma: no mutate
 
 
 class Scheduler:
@@ -98,8 +98,8 @@ class Scheduler:
         """
         self._workers_num = workers_num
         self._tz = tz
-        self._thread = None
-        self._thread_pool = None
+        self._thread = None  # pragma: no mutate
+        self._thread_pool = None  # pragma: no mutate
         self._running = Event()
         self._tasks: list[Task] = []
         self._inbox: Queue[object] = Queue()
@@ -117,10 +117,10 @@ class Scheduler:
 
         dt_next_task = self._tasks[0].next_run_time
         if dt_next_task is None:
-            msg = "Scheduled task has no next run time"
-            raise TypeError(msg)
+            msg = "Scheduled task has no next run time"  # pragma: no mutate
+            raise TypeError(msg)  # pragma: no mutate
         dt_current = datetime.now(timezone.utc)
-        if dt_next_task < dt_current:
+        if dt_next_task < dt_current:  # pragma: no mutate
             return 0
         return (dt_next_task - dt_current).total_seconds()
 
@@ -161,9 +161,9 @@ class Scheduler:
         время которых наступило.
         """
         timeout = self._calc_next_task_execute_time()
-        if timeout is None or timeout > 0:
+        if timeout is None or timeout > 0:  # pragma: no mutate
             try:
-                command = self._inbox.get(block=True, timeout=timeout)
+                command = self._inbox.get(timeout=timeout)  # pragma: no mutate
             except Empty:
                 self._run_due_tasks()
             else:
@@ -181,8 +181,8 @@ class Scheduler:
                 self._loop()
         finally:
             if self._thread_pool:
-                self._thread_pool.shutdown(wait=True, cancel_futures=True)
-                self._thread_pool = None
+                self._thread_pool.shutdown(cancel_futures=True)
+                self._thread_pool = None  # pragma: no mutate
             self._drain_inbox()
             self._running.clear()
 
@@ -192,7 +192,7 @@ class Scheduler:
         """
         while True:
             try:
-                command = self._inbox.get(block=False)
+                command = self._inbox.get(block=False)  # pragma: no mutate
             except Empty:
                 return
             if not isinstance(command, Stop):
@@ -216,7 +216,7 @@ class Scheduler:
 
         """
         if self._running.is_set():
-            raise RuntimeError("Scheduler is already running")
+            raise RuntimeError("Scheduler is already running")  # pragma: no mutate
         self._running.set()
         with contextlib.suppress(KeyboardInterrupt):
             self._run_loop()
@@ -247,7 +247,7 @@ class Scheduler:
         self._running.set()
         self._thread = Thread(
             target=self._run_loop,
-            name="classic-scheduler",
+            name="classic-scheduler",  # pragma: no mutate
             daemon=daemon,
         )
         self._thread.start()

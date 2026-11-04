@@ -1,6 +1,7 @@
 from collections.abc import Iterator
 
 import pytest
+
 from classic.scheduler import Scheduler
 
 

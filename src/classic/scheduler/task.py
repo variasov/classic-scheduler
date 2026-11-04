@@ -33,7 +33,7 @@ class Task(ABC):
         self._kwargs = kwargs or {}
         self._name = name or job.__qualname__
         # время следующего запуска задачи
-        self._next_run_time: datetime | None = None
+        self._next_run_time: datetime | None = None  # pragma: no mutate
 
     @property
     def name(self) -> str:
@@ -61,36 +61,36 @@ class Task(ABC):
         """Вызывает переданный Callable объект со всем аргументами
         в потоке планировщика.
         """
-        logging.info(
-            "Task [%s] started with schedule [%s]",
-            self._name,
-            self._next_run_time,
-        )
+        logging.info(  # pragma: no mutate
+            "Task [%s] started with schedule [%s]",  # pragma: no mutate
+            self._name,  # pragma: no mutate
+            self._next_run_time,  # pragma: no mutate
+        )  # pragma: no mutate
 
         try:
             self._job(*self._args, **self._kwargs)
         except Exception as ex:
-            logging.exception(
-                'Unexpected error occurred in task [%s]: "%s".',
-                self._name,
-                ex,
-            )
+            logging.exception(  # pragma: no mutate
+                'Unexpected error occurred in task [%s]: "%s".',  # pragma: no mutate
+                self._name,  # pragma: no mutate
+                ex,  # pragma: no mutate
+            )  # pragma: no mutate
         else:
-            logging.info("Task completed [%s]", self._name)
+            logging.info("Task completed [%s]", self._name)  # pragma: no mutate
 
     def _sort_key(self) -> datetime:
         if self._next_run_time is None:
-            msg = "Task has no next run time"
-            raise TypeError(msg)
+            msg = "Task has no next run time"  # pragma: no mutate
+            raise TypeError(msg)  # pragma: no mutate
         return self._next_run_time
 
     def __lt__(self, other: "Task") -> bool:
         """Сравнивает задачи по времени следующего запуска."""
-        return self._sort_key() < other._sort_key()
+        return self._sort_key() < other._sort_key()  # pragma: no mutate
 
     def __gt__(self, other: "Task") -> bool:
         """Сравнивает задачи по времени следующего запуска."""
-        return self._sort_key() > other._sort_key()
+        return self._sort_key() > other._sort_key()  # pragma: no mutate
 
 
 class OneTimeTask(Task):

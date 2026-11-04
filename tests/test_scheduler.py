@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Event, Thread
 
 import pytest
+
 from classic.scheduler import Scheduler
 from classic.scheduler.task import CronTask, OneTimeTask, PeriodicTask
 
