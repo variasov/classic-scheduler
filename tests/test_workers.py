@@ -49,8 +49,8 @@ def _check_concurrency(scheduler: Scheduler, expected: int) -> None:
     probe = _Probe()
     scheduler.start()
     try:
-        for i in range(expected + 1):
-            scheduler.with_delay(0, probe, task_name=f"job{i}")
+        for _ in range(expected + 1):
+            scheduler.with_delay(0, probe)
 
         assert probe.wait_active(expected)
         Event().wait(GRACE)
@@ -127,9 +127,9 @@ def test__stop__cancels_jobs_queued_in_pool() -> None:
     scheduler.start()
     probe = _Probe()
     second_ran = Event()
-    scheduler.with_delay(0, probe, task_name="a")
+    scheduler.with_delay(0, probe)
     assert probe.wait_active(1)
-    scheduler.with_delay(0, second_ran.set, task_name="b")
+    scheduler.with_delay(0, second_ran.set)
     # Задача b наступила и ушла в очередь пула (воркер занят задачей a).
     Event().wait(GRACE)
 

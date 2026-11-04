@@ -17,7 +17,6 @@ class Task(ABC):
         job: Callable[..., Any],
         args: tuple[Any, ...] | None = None,
         kwargs: dict[str, Any] | None = None,
-        name: str | None = None,
     ) -> None:
         """Создаёт задачу.
 
@@ -25,13 +24,13 @@ class Task(ABC):
             job: Вызываемая в задаче функция.
             args: Позиционные аргументы функции.
             kwargs: Именованные аргументы функции.
-            name: Имя задачи. По умолчанию - имя функции.
 
         """
         self._job = job
         self._args = args or ()
         self._kwargs = kwargs or {}
-        self._name = name or job.__qualname__
+        # У functools.partial и экземпляров с __call__ нет __qualname__
+        self._name = getattr(job, "__qualname__", type(job).__qualname__)
         # время следующего запуска задачи
         self._next_run_time: datetime | None = None  # pragma: no mutate
 

@@ -3,7 +3,8 @@
 Планировщик ``Scheduler`` вызывает переданные функции по расписанию:
 один раз через отсрочку (``with_delay``), периодически (``by_period``)
 или по CRON-выражению (``by_cron``). Работает в текущем потоке (``run()``)
-либо в фоновом (``start()``), задачи выполняются в пуле потоков.
+либо в фоновом (``start()``), задачи выполняются в пуле потоков. Методы
+добавления возвращают ``ScheduledJob``, у которого есть ``cancel()``.
 
 Example:
     ::
@@ -15,11 +16,11 @@ Example:
 
         if __name__ == "__main__":
             scheduler = Scheduler()
-            scheduler.by_period(10, ping)
-            scheduler.run()
+            job = scheduler.by_period(10, ping)
+            scheduler.run()  # job.cancel() отменяет задачу
 
 """
 
-from .scheduler import Scheduler
+from .scheduler import ScheduledJob, Scheduler
 
-__all__ = ["Scheduler"]
+__all__ = ["ScheduledJob", "Scheduler"]

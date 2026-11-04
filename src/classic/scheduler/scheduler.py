@@ -17,12 +17,57 @@ from .task import CronTask, OneTimeTask, PeriodicTask, Task
 class CancelTask:
     """Команда отмены запланированной задачи."""
 
-    task_name: str
+    task: Task
 
 
 @dataclass
 class Stop:
     """Команда остановки планировщика."""
+
+
+class ScheduledJob:
+    """Дескриптор запланированной задачи.
+
+    Возвращается методами ``Scheduler.with_delay()``, ``by_period()`` и
+    ``by_cron()``. Позволяет отменить именно эту задачу: две задачи с одной
+    и той же функцией (или lambda) отменяются независимо друг от друга.
+
+    Example:
+        ::
+
+            job = scheduler.by_period(60, collect_metrics)
+            ...
+            job.cancel()
+
+    """
+
+    def __init__(self, task: Task, inbox: Queue[object]) -> None:
+        """Создаёт дескриптор. Используется планировщиком, не пользователем."""
+        self._task = task
+        self._inbox = inbox
+
+    def __repr__(self) -> str:
+        """Возвращает читаемое представление с именем функции задачи."""
+        return f"<ScheduledJob {self._task.name}>"
+
+    def cancel(self) -> None:
+        """Отменяет эту задачу.
+
+        Асинхронно: команда передаётся планировщику и применяется его
+        циклом. Уже идущий запуск не прерывается. Повторный вызов, вызов
+        после выполнения одноразовой задачи и вызов при остановленном
+        планировщике безопасны: в последнем случае отмена применится при
+        следующем запуске планировщика.
+
+        Example:
+            ::
+
+                job = scheduler.with_delay(30, send_report)
+                job.cancel()
+                job.cancel()  # повторная отмена безопасна
+
+        """
+        self._inbox.put(CancelTask(task=self._task))
 
 
 def _is_due(task: Task, now: datetime) -> bool:
@@ -39,7 +84,8 @@ class Scheduler:
     Вызывает переданные ``Callable`` объекты в соответствии с расписанием.
     Поддерживаются три типа задач: одноразовая через отсрочку
     (``with_delay``), периодическая (``by_period``) и по CRON-расписанию
-    (``by_cron``).
+    (``by_cron``). Каждый из этих методов возвращает ``ScheduledJob``,
+    у которого есть ``cancel()`` для отмены именно этой задачи.
 
     Задачи можно добавлять до запуска и после него, из любого потока:
     команды передаются через внутреннюю очередь, а кучей задач владеет
@@ -71,8 +117,9 @@ class Scheduler:
             scheduler = Scheduler()
             scheduler.start()
             try:
-                scheduler.by_period(10, ping, task_name="ping")
+                job = scheduler.by_period(10, ping)
                 ...
+                job.cancel()  # отмена конкретной задачи
             finally:
                 scheduler.stop(block=True)
 
@@ -103,6 +150,10 @@ class Scheduler:
         self._running = Event()
         self._tasks: list[Task] = []
         self._inbox: Queue[object] = Queue()
+
+    def _add(self, task: Task) -> ScheduledJob:
+        self._inbox.put(task)
+        return ScheduledJob(task, self._inbox)
 
     def _calc_next_task_execute_time(self) -> float | None:
         """Возвращает время ожидания выполнения следующей задачи.
@@ -143,7 +194,7 @@ class Scheduler:
         if isinstance(command, Task):
             self._schedule(command)
         elif isinstance(command, CancelTask):
-            self._cancel(command.task_name)
+            self._cancel(command.task)
         elif isinstance(command, Stop):
             self._running.clear()
 
@@ -303,8 +354,7 @@ class Scheduler:
         job: Callable[..., Any],
         args: tuple[Any, ...] | None = None,
         kwargs: dict[str, Any] | None = None,
-        task_name: str | None = None,
-    ) -> None:
+    ) -> ScheduledJob:
         """Добавляет одноразовую задачу, выполняемую через заданную отсрочку.
 
         Задача будет выполнена ровно один раз. Отсрочка отсчитывается от
@@ -316,28 +366,26 @@ class Scheduler:
             job: Вызываемый объект, который будет выполнен.
             args: Позиционные аргументы, с которыми вызывается ``job``.
             kwargs: Именованные аргументы, с которыми вызывается ``job``.
-            task_name: Имя задачи, по которому её можно отменить через
-                ``cancel()``. По умолчанию ``job.__qualname__``: у всех
-                lambda-функций имя одинаковое (``<lambda>``), у всех
-                bound-методов одного класса тоже совпадает. Если планируете
-                отменять задачу, передавайте имя явно.
+
+        Returns:
+            Дескриптор задачи; ``cancel()`` отменяет именно её.
 
         Example:
             ::
 
-                scheduler.with_delay(30, send_report, kwargs={"to": "ops"})
+                job = scheduler.with_delay(30, send_report, kwargs={"to": "ops"})
+                job.cancel()  # если отчёт больше не нужен
 
         """
         if not isinstance(delay, timedelta):
             delay = timedelta(seconds=delay)
 
-        self._inbox.put(
+        return self._add(
             OneTimeTask(
                 date=datetime.now(timezone.utc) + delay,
                 job=job,
                 args=args,
                 kwargs=kwargs,
-                name=task_name,
             )
         )
 
@@ -347,9 +395,8 @@ class Scheduler:
         job: Callable[..., Any],
         args: tuple[Any, ...] | None = None,
         kwargs: dict[str, Any] | None = None,
-        task_name: str | None = None,
         tz: tzinfo | None = None,
-    ) -> None:
+    ) -> ScheduledJob:
         """Добавляет задачу, выполняемую по CRON-расписанию.
 
         Расписание разбирает ``croniter``: стандартные 5 полей (минута, час,
@@ -365,33 +412,30 @@ class Scheduler:
             job: Вызываемый объект, который будет выполнен.
             args: Позиционные аргументы, с которыми вызывается ``job``.
             kwargs: Именованные аргументы, с которыми вызывается ``job``.
-            task_name: Имя задачи, по которому её можно отменить через
-                ``cancel()``. По умолчанию ``job.__qualname__``: у всех
-                lambda-функций имя одинаковое (``<lambda>``), у всех
-                bound-методов одного класса тоже совпадает. Если планируете
-                отменять задачу, передавайте имя явно.
             tz: Часовой пояс расписания. None - часовой пояс планировщика.
+
+        Returns:
+            Дескриптор задачи; ``cancel()`` отменяет именно её.
 
         Example:
             ::
 
                 from zoneinfo import ZoneInfo
 
-                scheduler.by_cron(
+                job = scheduler.by_cron(
                     "30 9 * * 1-5",
                     send_report,
                     tz=ZoneInfo("Europe/Moscow"),
                 )
 
         """
-        self._inbox.put(
+        return self._add(
             CronTask(
                 schedule=schedule,
                 tz=tz or self._tz,
                 job=job,
                 args=args,
                 kwargs=kwargs,
-                name=task_name,
             )
         )
 
@@ -401,8 +445,7 @@ class Scheduler:
         job: Callable[..., Any],
         args: tuple[Any, ...] | None = None,
         kwargs: dict[str, Any] | None = None,
-        task_name: str | None = None,
-    ) -> None:
+    ) -> ScheduledJob:
         """Добавляет периодическую задачу.
 
         Первый запуск происходит сразу после добавления, каждый следующий
@@ -416,60 +459,38 @@ class Scheduler:
             job: Вызываемый объект, который будет выполнен.
             args: Позиционные аргументы, с которыми вызывается ``job``.
             kwargs: Именованные аргументы, с которыми вызывается ``job``.
-            task_name: Имя задачи, по которому её можно отменить через
-                ``cancel()``. По умолчанию ``job.__qualname__``: у всех
-                lambda-функций имя одинаковое (``<lambda>``), у всех
-                bound-методов одного класса тоже совпадает. Если планируете
-                отменять задачу, передавайте имя явно.
+
+        Returns:
+            Дескриптор задачи; ``cancel()`` отменяет именно её.
 
         Example:
             ::
 
-                scheduler.by_period(60, collect_metrics, task_name="metrics")
+                job = scheduler.by_period(60, collect_metrics)
+                ...
+                job.cancel()
 
         """
         if not isinstance(period, timedelta):
             period = timedelta(seconds=period)
 
-        self._inbox.put(
+        return self._add(
             PeriodicTask(
                 period=period,
                 job=job,
                 args=args,
                 kwargs=kwargs,
-                name=task_name,
             )
         )
 
-    def cancel(self, task_name: str) -> None:
-        """Отменяет все запланированные задачи с указанным именем.
-
-        Асинхронно: команда применяется циклом планировщика. Уже идущий
-        запуск задачи не прерывается. Для задач, добавленных без
-        ``task_name``, имя - ``job.__qualname__``.
+    def _cancel(self, task: Task) -> None:
+        """Убирает из кучи ровно эту задачу (по идентичности объекта).
 
         Args:
-            task_name: Имя задач для отмены.
-
-        Example:
-            ::
-
-                scheduler.by_period(60, collect_metrics, task_name="metrics")
-                ...
-                scheduler.cancel("metrics")
+            task (Task): Задача для отмены.
 
         """
-        cancellation = CancelTask(task_name=task_name)
-        self._inbox.put(cancellation)
-
-    def _cancel(self, task_name: str) -> None:
-        """Отменяет выполнение запланированной задачи.
-
-        Args:
-            task_name (str): Имя задачи для отмены.
-
-        """
-        tasks = [t for t in self._tasks if t.name != task_name]
+        tasks = [t for t in self._tasks if t is not task]
         if len(self._tasks) != len(tasks):
             heapq.heapify(tasks)
             self._tasks = tasks

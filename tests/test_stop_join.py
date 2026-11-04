@@ -44,7 +44,7 @@ def _block_scheduler_thread(scheduler: Scheduler) -> Event:
         release.wait(TIMEOUT)
 
     scheduler.start()
-    scheduler.with_delay(0, blocker, task_name="blocker")
+    scheduler.with_delay(0, blocker)
     assert started.wait(TIMEOUT)
     return release
 
@@ -55,7 +55,7 @@ def test__stop__keeps_tasks_added_after_stop() -> None:
     executed = Event()
 
     scheduler.stop()
-    scheduler.with_delay(0, executed.set, task_name="late")
+    scheduler.with_delay(0, executed.set)
     release.set()
     scheduler.join(TIMEOUT)
     assert not scheduler.is_alive()
@@ -70,17 +70,17 @@ def test__stop__keeps_tasks_added_after_stop() -> None:
 def test__stop__applies_cancel_sent_after_stop() -> None:
     scheduler = Scheduler(workers_num=0)
     cancelled, sentinel = Event(), Event()
-    scheduler.with_delay(1, cancelled.set, task_name="x")
+    job = scheduler.with_delay(1, cancelled.set)
     release = _block_scheduler_thread(scheduler)
 
     scheduler.stop()
-    scheduler.cancel("x")
+    job.cancel()
     release.set()
     scheduler.join(TIMEOUT)
     # Срок задачи x наступает, пока планировщик остановлен.
     Event().wait(1.2)
     scheduler.start()
-    scheduler.with_delay(0, sentinel.set, task_name="sentinel")
+    scheduler.with_delay(0, sentinel.set)
 
     # Задача x (если бы осталась) просрочена и выполнилась бы раньше sentinel.
     assert sentinel.wait(TIMEOUT)
@@ -95,7 +95,7 @@ def test__stop__extra_stop_commands_do_not_affect_restart() -> None:
 
     scheduler.stop()
     scheduler.stop()
-    scheduler.with_delay(0, first.set, task_name="first")
+    scheduler.with_delay(0, first.set)
     scheduler.stop()
     release.set()
     scheduler.join(TIMEOUT)
@@ -105,7 +105,7 @@ def test__stop__extra_stop_commands_do_not_affect_restart() -> None:
     assert first.wait(TIMEOUT)
     # Оставшийся в очереди Stop остановил бы перезапущенный планировщик
     # до выполнения этой задачи.
-    scheduler.with_delay(0, second.set, task_name="second")
+    scheduler.with_delay(0, second.set)
     assert second.wait(TIMEOUT)
     assert scheduler.is_alive()
     scheduler.stop(block=True, timeout=TIMEOUT)
@@ -219,10 +219,10 @@ def test__overdue_tasks__run_without_waiting() -> None:
         if count == hops:
             done.set()
         else:
-            scheduler.with_delay(-1, hop, task_name="hop")
+            scheduler.with_delay(-1, hop)
 
     scheduler.start()
-    scheduler.with_delay(-1, hop, task_name="hop")
+    scheduler.with_delay(-1, hop)
 
     assert done.wait(hops - 1)
     scheduler.stop(block=True, timeout=TIMEOUT)

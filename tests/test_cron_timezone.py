@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from threading import Event
 
-from classic.scheduler import Scheduler
+from classic.scheduler import ScheduledJob, Scheduler
 from classic.scheduler.task import CronTask, Task
 
 TIMEOUT = 10
@@ -89,18 +89,19 @@ def test__by_cron__explicit_timezone_without_scheduler_timezone() -> None:
     assert _hour_in(_scheduled_cron_task(scheduler), PLUS_7) == 9
 
 
-def test__by_cron__passes_arguments_and_name() -> None:
+def test__by_cron__passes_arguments() -> None:
     scheduler = Scheduler()
     result: list[tuple[int, int]] = []
     executed = Event()
+    handle: list[ScheduledJob] = []
 
     def target(a: int, b: int = 0) -> None:
         result.append((a, b))
-        # Отмена по имени: больше запусков быть не должно.
-        scheduler.cancel("n")
+        # Отмена по дескриптору: больше запусков быть не должно.
+        handle[0].cancel()
         executed.set()
 
-    scheduler.by_cron("* * * * * *", target, args=(1,), kwargs={"b": 2}, task_name="n")
+    handle.append(scheduler.by_cron("* * * * * *", target, args=(1,), kwargs={"b": 2}))
     scheduler.start()
     assert executed.wait(TIMEOUT)
     # Следующий запуск наступил бы не позже чем через секунду.
