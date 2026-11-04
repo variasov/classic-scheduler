@@ -6,8 +6,14 @@ on:
       - main
 
 jobs:
+  checks:
+    name: Checks
+    uses: ./.github/workflows/checks.yml
+
   build:
     name: Build distribution
+    needs:
+    - checks
     runs-on: ubuntu-latest
 
     steps:
@@ -15,16 +21,11 @@ jobs:
       with:
         persist-credentials: false
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-
-    - name: Install build tools
-      run: python -m pip install --upgrade pip build
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
 
     - name: Build sdist and wheel
-      run: python -m build
+      run: uv build
 
     - name: Store the distribution packages
       uses: actions/upload-artifact@v4
