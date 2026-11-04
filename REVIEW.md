@@ -79,23 +79,25 @@
 
 ## План задач
 
-| # | Задача | Где | Объём |
-|---|---|---|---|
-| 1 | Убрать зависимость от `classic-actors`: свой цикл, `start`/`run`/`stop`/`join`; `stop()` работает и при `run()`; не-daemon поток с корректной остановкой | scheduler | M |
-| 2 | Повторный запуск после `stop()`: пул создаётся в `_before_loop` | scheduler | S |
-| 3 | Часовой пояс для cron: параметр `tz`, по умолчанию локальный пояс процесса, описать в README | scheduler | S |
-| 4 | Имена задач в `register`/`unregister` по методу, убрать лишние вызовы | scheduler | S |
-| 5 | Имя задачи по умолчанию — уникальное, `cancel` не задевает чужие задачи | scheduler | S |
-| 6 | Перекрытие запусков: очередной запуск пропускается с warning, если предыдущий ещё идёт | scheduler | S/M |
-| 7 | Типизация: `py.typed`, `Optional`, `Callable[..., Any]`, декораторы, `__all__`; pyright strict без ошибок | scheduler | M |
-| 8 | Именованный логгер `classic.scheduler` | scheduler | S |
-| 9 | Тесты: без хрупких `sleep`, на новые сценарии | scheduler | M |
-| 10 | README: исправить ошибки, описать поведение | scheduler | S |
-| 11 | Версия 2.0.0 и CHANGELOG | scheduler | S |
+| # | Задача | Где | Объём | Статус |
+|---|---|---|---|---|
+| 1 | Убрать зависимость от `classic-actors`: свой цикл, `start`/`run`/`stop`/`join`; `stop()` работает и при `run()`; не-daemon поток с корректной остановкой | scheduler | M | сделано (`320962b`) |
+| 2 | Повторный запуск после `stop()`: пул создаётся в `_before_loop` | scheduler | S | сделано (`320962b`) |
+| 3 | Часовой пояс для cron: параметр `tz`, по умолчанию локальный пояс процесса, описать в README | scheduler | S | сделано (`93e2eb9`) |
+| 4 | Имена задач в `register`/`unregister` по методу, убрать лишние вызовы | scheduler | S | отпало: `register`/`unregister` удалены вместе с classic-components (`69b7794`) |
+| 5 | Имя задачи по умолчанию — уникальное, `cancel` не задевает чужие задачи | scheduler | S | |
+| 6 | Перекрытие запусков: очередной запуск пропускается с warning, если предыдущий ещё идёт | scheduler | S/M | |
+| 7 | Типизация: `py.typed`, `Optional`, `Callable[..., Any]`, декораторы, `__all__`; pyright strict без ошибок | scheduler | M | |
+| 8 | Именованный логгер `classic.scheduler` | scheduler | S | |
+| 9 | Тесты: без хрупких `sleep`, на новые сценарии | scheduler | M | |
+| 10 | README: исправить ошибки, описать поведение | scheduler | S | |
+| 11 | Линтеры: ruff и pyright strict в pyproject (конфиг по образцу classic-migrations), код и тесты без замечаний | scheduler | M | |
+| 12 | Версия 2.0.0 и CHANGELOG | scheduler | S | |
 
 ### Решения (2026-11-04)
 
 - Отказаться от зависимости `classic-actors`: цикл, очередь команд, `start`/`run`/`stop`/`join`/`is_alive`
   переносятся в сам `Scheduler`. Задачи 1 и 7 из `classic-actors/REVIEW.md` (stop при `run()`, daemon-поток)
   решаются здесь. `Scheduler` перестаёт быть `Actor` — его нельзя будет передать в `classic.actors.Supervisor`.
+- Убрать интеграцию с `classic-components`: декораторы `by_cron`/`by_period`, `register`/`unregister`, наследование `Registry`.
 - Изменения поведения (локальный пояс cron, пропуск перекрывающихся запусков, отказ от `Actor`) — мажорная версия 2.0.0.
