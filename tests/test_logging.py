@@ -118,8 +118,7 @@ def test__run__start_and_completion_logged_at_debug(
     assert [r.levelno for r in records] == [logging.DEBUG, logging.DEBUG]
     assert all(r.name == "classic.scheduler.task" for r in records)
     assert "started" in records[0].getMessage()
-    # Разовая задача к моменту запуска уже без следующего времени.
-    assert "schedule [None]" in records[0].getMessage()
+    assert "job" in records[0].getMessage()
     assert "completed" in records[1].getMessage()
 
 
@@ -180,27 +179,3 @@ def test__logging__never_uses_root_logger(
     levels = {r.levelno for r in caplog.records}
     assert {logging.DEBUG, logging.WARNING, logging.ERROR} <= levels
     assert all(r.name.startswith("classic.scheduler.") for r in caplog.records)
-
-
-def test__periodic_start__logs_next_run_time(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    started = Event()
-    logger = logging.getLogger(LOGGER)
-    handler = _Record(started, "started")
-    logger.addHandler(handler)
-    scheduler = Scheduler()
-    scheduler.by_period(3600, job)
-    try:
-        with caplog.at_level(logging.DEBUG, logger=LOGGER):
-            scheduler.start()
-            assert started.wait(TIMEOUT)
-    finally:
-        scheduler.stop(block=True, timeout=TIMEOUT)
-        logger.removeHandler(handler)
-
-    message = next(
-        r.getMessage() for r in caplog.records if "started" in r.getMessage()
-    )
-    assert "schedule [None]" not in message
-    assert "20" in message

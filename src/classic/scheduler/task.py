@@ -68,9 +68,8 @@ class Task(ABC):
         в потоке планировщика.
         """
         logger.debug(
-            "Task [%s] started with schedule [%s]",  # pragma: no mutate
+            "Task started [%s]",  # pragma: no mutate
             self._name,
-            self._next_run_time,
         )
 
         try:
