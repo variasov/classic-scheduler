@@ -4,9 +4,12 @@ import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone, tzinfo
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from croniter import croniter
+
+if TYPE_CHECKING:
+    from concurrent.futures import Future
 
 
 class Task(ABC):
@@ -33,6 +36,8 @@ class Task(ABC):
         self._name = getattr(job, "__qualname__", type(job).__qualname__)
         # время следующего запуска задачи
         self._next_run_time: datetime | None = None  # pragma: no mutate
+        # последний запуск в пуле; пишет только поток планировщика
+        self.last_future: Future[None] | None = None  # pragma: no mutate
 
     @property
     def name(self) -> str:
