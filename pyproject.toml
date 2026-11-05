@@ -76,8 +76,6 @@ ignore = [
     "RUF003",   # comments are in Russian: Cyrillic letters are intended
     "CPY001",   # no copyright headers in this project
     "ANN401",   # Task subclasses forward *args/**kwargs to Task.__init__
-    "LOG015",   # tasks log to the root logger; changing it alters log names
-    "TRY401",   # logging.exception message format is kept as is
     "COM812",   # conflicts with the ruff formatter
 ]
 

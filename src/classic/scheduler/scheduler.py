@@ -13,6 +13,8 @@ from typing import Any
 
 from .task import CronTask, OneTimeTask, PeriodicTask, Task
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class CancelTask:
@@ -94,10 +96,16 @@ class Scheduler:
     потоков; при ``workers_num=0`` - последовательно в самом потоке
     планировщика (долгая задача при этом задерживает остальные). Периодическая
     и CRON-задача не запускается повторно, пока не завершился её предыдущий
-    запуск в пуле: такой запуск пропускается с предупреждением в лог и не
-    наверстывается; другие задачи это не затрагивает. Исключение
-    в задаче логируется и не останавливает планировщик. Запланированные
-    задачи сохраняются между ``stop()`` и последующим ``start()``/``run()``.
+    запуск в пуле: такой запуск пропускается и не наверстывается; другие
+    задачи это не затрагивает. Запланированные задачи сохраняются между
+    ``stop()`` и последующим ``start()``/``run()``.
+
+    Логирование: используются именованные логгеры иерархии
+    ``classic.scheduler`` (``classic.scheduler.task``,
+    ``classic.scheduler.scheduler``), корневой логгер не используется.
+    Пропуск запуска - WARNING; исключение в задаче - ERROR с traceback
+    (планировщик продолжает работу); начало и завершение запуска - DEBUG.
+    Настраивается стандартным ``logging`` по имени родителя.
 
     Example:
         Блокирующий запуск в главном потоке (остановка по Ctrl+C)::
@@ -115,6 +123,12 @@ class Scheduler:
                 scheduler.by_period(timedelta(minutes=1), ping)
                 scheduler.by_cron("0 3 * * *", ping)
                 scheduler.run()
+
+        Настройка логирования (например, видеть начало и конец запусков)::
+
+            import logging
+
+            logging.getLogger("classic.scheduler").setLevel(logging.DEBUG)
 
         Запуск в фоновом потоке::
 
@@ -192,10 +206,10 @@ class Scheduler:
         if self._thread_pool:
             previous = task.last_future
             if previous is not None and not previous.done():
-                logging.warning(  # pragma: no mutate
+                logger.warning(
                     "Task [%s] skipped: previous run in progress",  # pragma: no mutate
-                    task.name,  # pragma: no mutate
-                )  # pragma: no mutate
+                    task.name,
+                )
                 return
             task.last_future = self._thread_pool.submit(task.run_job)
         else:

@@ -11,6 +11,8 @@ from croniter import croniter
 if TYPE_CHECKING:
     from concurrent.futures import Future
 
+logger = logging.getLogger(__name__)
+
 
 class Task(ABC):
     """Задача, выполняемая в потоке планировщика."""
@@ -65,22 +67,24 @@ class Task(ABC):
         """Вызывает переданный Callable объект со всем аргументами
         в потоке планировщика.
         """
-        logging.info(  # pragma: no mutate
+        logger.debug(
             "Task [%s] started with schedule [%s]",  # pragma: no mutate
-            self._name,  # pragma: no mutate
-            self._next_run_time,  # pragma: no mutate
-        )  # pragma: no mutate
+            self._name,
+            self._next_run_time,
+        )
 
         try:
             self._job(*self._args, **self._kwargs)
-        except Exception as ex:
-            logging.exception(  # pragma: no mutate
-                'Unexpected error occurred in task [%s]: "%s".',  # pragma: no mutate
-                self._name,  # pragma: no mutate
-                ex,  # pragma: no mutate
-            )  # pragma: no mutate
+        except Exception:
+            logger.exception(
+                "Unexpected error occurred in task [%s]",  # pragma: no mutate
+                self._name,
+            )
         else:
-            logging.info("Task completed [%s]", self._name)  # pragma: no mutate
+            logger.debug(
+                "Task completed [%s]",  # pragma: no mutate
+                self._name,
+            )
 
     def _sort_key(self) -> datetime:
         if self._next_run_time is None:
