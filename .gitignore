@@ -65,6 +65,7 @@ celerybeat.pid
 *.sage.py
 .env
 .venv
+.venv-*/
 env/
 venv/
 ENV/
@@ -99,3 +100,6 @@ Temporary Items
 .apdisk
 .idea/
 .vscode/
+
+# mutmut
+mutants/
