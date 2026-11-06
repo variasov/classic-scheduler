@@ -85,14 +85,14 @@
 | 2 | Повторный запуск после `stop()`: пул создаётся в `_before_loop` | scheduler | S | сделано (`320962b`) |
 | 3 | Часовой пояс для cron: параметр `tz`, по умолчанию локальный пояс процесса, описать в README | scheduler | S | сделано (`93e2eb9`) |
 | 4 | Имена задач в `register`/`unregister` по методу, убрать лишние вызовы | scheduler | S | отпало: `register`/`unregister` удалены вместе с classic-components (`69b7794`) |
-| 5 | Имя задачи по умолчанию — уникальное, `cancel` не задевает чужие задачи | scheduler | S | |
-| 6 | Перекрытие запусков: очередной запуск пропускается с warning, если предыдущий ещё идёт | scheduler | S/M | |
-| 7 | Типизация: `py.typed`, `Optional`, `Callable[..., Any]`, декораторы, `__all__`; pyright strict без ошибок | scheduler | M | |
-| 8 | Именованный логгер `classic.scheduler` | scheduler | S | |
-| 9 | Тесты: без хрупких `sleep`, на новые сценарии | scheduler | M | |
-| 10 | README: исправить ошибки, описать поведение | scheduler | S | |
-| 11 | Линтеры: ruff и pyright strict в pyproject (конфиг по образцу classic-migrations), код и тесты без замечаний | scheduler | M | |
-| 12 | Версия 2.0.0 и CHANGELOG | scheduler | S | |
+| 5 | Имя задачи по умолчанию — уникальное, `cancel` не задевает чужие задачи | scheduler | S | сделано: отмена через `ScheduledJob`, имена больше не публичные (`3553e59`) |
+| 6 | Перекрытие запусков: очередной запуск пропускается с warning, если предыдущий ещё идёт | scheduler | S/M | сделано (`e73499b`) |
+| 7 | Типизация: `py.typed`, `Optional`, `Callable[..., Any]`, декораторы, `__all__`; pyright strict без ошибок | scheduler | M | сделано (`a805d7c`) |
+| 8 | Именованный логгер `classic.scheduler` | scheduler | S | сделано (`c72b32f`) |
+| 9 | Тесты: без хрупких `sleep`, на новые сценарии | scheduler | M | сделано (`62cd548`, `debfd4f`) |
+| 10 | README: исправить ошибки, описать поведение | scheduler | S | сделано (`a6f4168`) |
+| 11 | Линтеры: ruff и pyright strict в pyproject (конфиг по образцу classic-migrations), код и тесты без замечаний | scheduler | M | сделано (`a805d7c`, `40ef4d8`) |
+| 12 | Версия 2.0.0 и CHANGELOG | scheduler | S | сделано (`ebf533b`) |
 
 ### Решения (2026-11-04)
 
@@ -101,3 +101,8 @@
   решаются здесь. `Scheduler` перестаёт быть `Actor` — его нельзя будет передать в `classic.actors.Supervisor`.
 - Убрать интеграцию с `classic-components`: декораторы `by_cron`/`by_period`, `register`/`unregister`, наследование `Registry`.
 - Изменения поведения (локальный пояс cron, пропуск перекрывающихся запусков, отказ от `Actor`) — мажорная версия 2.0.0.
+
+### Состояние (2026-11-06)
+
+Все 12 задач плана выполнены (задача 4 отпала). Ветка `v2` готова к выпуску 2.0.0:
+57 тестов проходят, ruff и pyright strict без замечаний. Осталось слить `v2` в `main` и выложить на PyPI.
